@@ -1,0 +1,71 @@
+package foodkart.backend.security;
+
+import foodkart.backend.config.PasswordEncoderUtil;
+import foodkart.backend.service.impl.CustomUserDetailService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SpringSecurityConfig {
+
+    private final CustomUserDetailService customUserDetailService;
+    private final JWTAuthFilter jwtAuthFilter;
+
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setUserDetailsService(customUserDetailService);
+        authenticationProvider.setPasswordEncoder(PasswordEncoderUtil.getInstance());
+        return authenticationProvider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(
+                                "/user/signin",
+                                "/user/signup",
+
+                                "/auth/forgotPassword",
+                                "/auth/resetPassword/{token}",
+                                "/auth/resetPassword",
+
+                                "category/getAllCategories",
+                                "category/getCategoryById/{id}",
+                                "dish/findAllDishes",
+                                "dish/findDishById/{id}",
+
+                                "cart/geCartByUserId/{id}"
+
+                        )
+                        .permitAll()
+                        .requestMatchers("/admin/")
+                        .hasAuthority("Admin")
+                        .anyRequest()
+                        .authenticated())
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+}
