@@ -38,7 +38,7 @@ public class TokenServiceImpl implements TokenService {
             String resetLink = generateResetToken(tokenPojo);
 
             SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setFrom("onlystudiesplz@gmail.com");
+            msg.setFrom("");//enter the sender's email as in application.properties
             msg.setTo(email);
 
             msg.setSubject("FoodKart Password Recovery");
