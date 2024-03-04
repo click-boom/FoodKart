@@ -1,101 +1,93 @@
-import { IoRestaurantSharp } from "react-icons/io5";
-import { MdMarkEmailUnread } from "react-icons/md";
-import { TbLogout } from "react-icons/tb";
-import { useLocation, useNavigate } from "react-router-dom";
-import { clearLocalStorage } from "../../auth/authService";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import CartCard from "./CartCard";
 import axios from "axios";
+interface CartItem {
+  cart_id: number;
+  dish: string;
+  dishImage: string;
+  category_ID: number;
+  price: number;
+  quantity: number;
+}
 
-const Navbar: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const isDishesPage = location.pathname === "/admin/dishes";
-  const isRequestsPage = location.pathname === "/admin/requests";
+const CardsContainer: React.FC<{
+  setTotalPrice: (price: number) => void;
+  setTotalItems: (items: number) => void;
+}> = ({ setTotalPrice, setTotalItems }) => {
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const fetchCartItems = async (user_id: number) => {
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8080/cart/geCartByUserId/${user_id}`,
+        {
+          headers: {
+            authorization: "Bearer " + localStorage.getItem("accessToken"),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const cartData = await response.json();
+      const cartItemsPromises = cartData.map(async (item: any) => {
+        const dishResponse = await fetch(
+          `http://127.0.0.1:8080/dish/findDishById/${item.dish_id}`
+        );
+        const dishData = await dishResponse.json();
 
-  const [user, setUser] = useState({ first_name: "", last_name: "", user_name: "" });
+        return {
+          cart_id: item.id,
+          dish: dishData.dish,
+          dishImage: dishData.dishImage,
+          category_ID: dishData.category_ID,
+          price: dishData.price,
+          quantity: item.quantity,
+        };
+      });
 
+      const cartItems = await Promise.all(cartItemsPromises);
+      setCartItems(cartItems);
+      const totalItems = new Set(cartItems.map((item) => item.dish)).size;
+      const totalPrice = cartItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
+
+      setTotalItems(totalItems);
+      setTotalPrice(totalPrice);
+    } catch (error) {
+      console.error("Error fetching cart items:", error);
+    }
+  };
+  const user_id = Number(localStorage.getItem("userId"));
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    const accessToken = localStorage.getItem("accessToken");
-
-    axios.get(`http://127.0.0.1:8080/user/getById/${userId}`, {
-      headers: {
-        authorization: "Bearer " + accessToken,
-        "Content-Type": "application/json",
-      },
-    })
-    .then((response) => {
-      const { first_name, last_name, user_name } = response.data;
-      setUser({ first_name, last_name, user_name });
-    })
-    .catch((error) => {
-      console.error("Error fetching user data", error);
-    });
+    fetchCartItems(user_id);
   }, []);
 
+  const handleRemove = async (id: number) => {
+    try {
+      const response = await axios.delete(
+        `http://127.0.0.1:8080/cart/deleteCartById/${id}`,
+        {
+          headers: {
+            authorization: "Bearer " + localStorage.getItem("accessToken"),
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      if (response.status === 200) {
+        fetchCartItems(user_id);
+      }
+    } catch (error) {
+      console.error("Error deleting dish:", error);
+    }
+  };
   return (
-    <nav
-      className={`flex flex-col  w-[18%] h-screen bg-slate-100 rounded-3xl p-5 font-montserrat`}
-    >
-      <div className=" p-3 flex items-center mb-2">
-        <div className="bg-main p-8 mr-3 rounded-full"></div>
-        <div className="flex flex-col">
-          <span className="text-xl font-semibold text-main">
-            {user.first_name} {user.last_name}
-          </span>
-          <span className="text-slate-500 ">{user.user_name}</span>
-        </div>
-      </div>
-      <hr className="border-main mb-3" />
-      <div className="flex flex-col p-5  text-slate-500">
-        <span className="font-semibold text-lg">Portals:</span>
-        <ul className="my-5">
-          <a href="/admin/dishes">
-            <div className="flex gap-4 text-2xl items-center mb-5">
-              <div
-                className={`flex justify-center items-center rounded-full w-12 h-12 ${
-                  isDishesPage ? "bg-main" : "bg-white"
-                }`}
-              >
-                <IoRestaurantSharp color={isDishesPage ? "white" : "#FFD700"} />
-              </div>
-              <li className={`${isDishesPage ? "text-main" : ""}`}>Dishes</li>
-            </div>
-          </a>
-          <a href="/admin/requests">
-            <div className="flex gap-4 text-2xl items-center mb-5">
-              <div
-                className={`flex justify-center items-center rounded-full w-12 h-12 ${
-                  isRequestsPage ? "bg-main" : "bg-white"
-                }`}
-              >
-                <MdMarkEmailUnread
-                  color={isRequestsPage ? "white" : "#FFD700"}
-                />
-              </div>
-              <li className={`${isRequestsPage ? "text-main" : ""}`}>
-                Requests
-              </li>
-            </div>
-          </a>
-          <a
-            onClick={(e) => {
-              e.preventDefault();
-              clearLocalStorage();
-              navigate("/auth");
-            }}
-          >
-            <div className="flex gap-4 text-2xl items-center">
-              <div className="flex justify-center items-center rounded-full w-12 h-12 bg-white">
-                <TbLogout color="#FFD700" />
-              </div>
-              <li>Logout</li>
-            </div>
-          </a>
-        </ul>
-      </div>
-    </nav>
+    <div className="flex flex-col w-[65%] bg-slate-100 gap-3 rounded-lg">
+      {cartItems.map((item) => (
+        <CartCard key={item.cart_id} item={item} handleRemove={handleRemove} />
+      ))}
+    </div>
   );
 };
 
-export default Navbar;
+export default CardsContainer;
